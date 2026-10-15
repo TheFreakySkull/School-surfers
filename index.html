@@ -2,7 +2,11 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#1a1a2e">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>School Surfers — Побег из школы</title>
   <link rel="stylesheet" href="css/style.css">
   <script async src="https://unpkg.com/es-module-shims@1.8.0/dist/es-module-shims.js"></script>
@@ -43,6 +47,7 @@
       <div id="guard-bar-fill"></div>
       <span id="guard-bar-text">ГЕНДОС</span>
     </div>
+    <button id="btn-fs" aria-label="Полный экран">⛶</button>
     <div id="event-banner" class="hidden"></div>
   </div>
 
@@ -67,7 +72,8 @@
         <button class="mode-btn" data-mode="impossible">🔴 НЕВОЗМОЖНО</button>
       </div>
       <button id="btn-play" class="btn-primary">ИГРАТЬ ▶</button>
-      <p class="hint">Управление: A/D или ← → — смена дорожки, W/↑/Space — прыжок, S/↓ — подкат. Свайп на телефоне.</p>
+      <p class="hint hint-desktop">Управление: A/D или ← → — смена дорожки, W/↑/Space — прыжок, S/↓ — подкат.</p>
+      <p class="hint hint-touch">Управление: кнопки ◀ ▶ ▲ ▼ по краям экрана или свайпы. Лучше играть вертикально 📱</p>
       <div id="loading">Загрузка ассетов...</div>
     </div>
   </div>
@@ -110,15 +116,15 @@
     </div>
   </div>
 
-  <!-- Mobile controls -->
+  <!-- Mobile controls: кластеры под большие пальцы -->
   <div id="mobile-controls">
-    <div class="mc-row">
-      <button class="mc-btn" id="mc-left">◀</button>
-      <button class="mc-btn" id="mc-right">▶</button>
+    <div class="mc-cluster mc-left">
+      <button class="mc-btn" id="mc-left" aria-label="Влево">◀</button>
+      <button class="mc-btn" id="mc-right" aria-label="Вправо">▶</button>
     </div>
-    <div class="mc-row">
-      <button class="mc-btn" id="mc-jump">▲ прыжок</button>
-      <button class="mc-btn" id="mc-slide">▼ подкат</button>
+    <div class="mc-cluster mc-right">
+      <button class="mc-btn" id="mc-jump" aria-label="Прыжок">▲</button>
+      <button class="mc-btn" id="mc-slide" aria-label="Подкат">▼</button>
     </div>
   </div>
 

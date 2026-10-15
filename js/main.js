@@ -17,11 +17,20 @@ export class Game {
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0xcfe6ff);
 
+    // мобильный профиль: ниже DPR и без MSAA/теней ради FPS и батареи
+    this.isMobile = window.matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
     this.camera = new THREE.PerspectiveCamera(68, window.innerWidth / window.innerHeight, 0.1, 200);
-    this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true, alpha: false });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer = new THREE.WebGLRenderer({
+      canvas: this.canvas,
+      antialias: !this.isMobile,
+      alpha: false,
+      stencil: false,
+      powerPreference: 'high-performance'
+    });
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.isMobile ? 1.5 : 2));
     this.renderer.setSize(window.innerWidth, window.innerHeight);
-    this.renderer.shadowMap.enabled = true;
+    // теней в сцене нет (только blob-тени мешами), на мобилках shadow-карту не считаем вовсе
+    this.renderer.shadowMap.enabled = !this.isMobile;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
     this.clock = new THREE.Clock();
@@ -73,6 +82,40 @@ export class Game {
     this._resize();
 
     window.addEventListener('resize', () => this._resize());
+    window.addEventListener('orientationchange', () => setTimeout(() => this._resize(), 120));
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', () => this._resize());
+    }
+    // сворачивание/блокировка телефона — автопауза, иначе Гендос догонит без тебя
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        if (this.state === 'playing') this.pause();
+        if (this._wakeLock) { this._wakeLock.release().catch(() => {}); this._wakeLock = null; }
+      } else {
+        this._acquireWakeLock();
+        this.clock.getDelta();
+      }
+    });
+  }
+
+  // экран не гаснет посреди побега (Wake Lock API, где поддерживается)
+  async _acquireWakeLock() {
+    try {
+      if ('wakeLock' in navigator && (this.state === 'playing' || this.state === 'cutscene')) {
+        this._wakeLock = await navigator.wakeLock.request('screen');
+      }
+    } catch { /* не поддерживается — просто играем */ }
+  }
+
+  _toggleFullscreen() {
+    try {
+      if (document.fullscreenElement || document.webkitFullscreenElement) {
+        (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+      } else {
+        const el = document.documentElement;
+        (el.requestFullscreen || el.webkitRequestFullscreen).call(el);
+      }
+    } catch { /* iPhone Safari не умеет — играем как есть */ }
   }
 
   _initLights() {
@@ -97,6 +140,16 @@ export class Game {
     this.btnPlay.addEventListener('click', () => this.startGame());
     this.btnRestart.addEventListener('click', () => this.restart());
     this.btnResume.addEventListener('click', () => this.resume());
+
+    // долгое нажатие на canvas не должно вызывать контекстное меню
+    this.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+    const btnFs = document.getElementById('btn-fs');
+    if (btnFs) {
+      const el = document.documentElement;
+      if (!el.requestFullscreen && !el.webkitRequestFullscreen) btnFs.style.display = 'none';
+      else btnFs.addEventListener('click', () => this._toggleFullscreen());
+    }
 
     window.addEventListener('keydown', (e) => this._onKey(e));
 
@@ -167,9 +220,14 @@ export class Game {
   }
 
   _resize() {
-    this.camera.aspect = window.innerWidth / window.innerHeight;
+    // visualViewport точнее отдаёт область без URL-плашки мобильного браузера
+    const w = window.visualViewport ? window.visualViewport.width : window.innerWidth;
+    const h = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+    this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
-    this.renderer.setSize(window.innerWidth, window.innerHeight);
+    this.renderer.setSize(w, h, false);
+    this.canvas.style.width = w + 'px';
+    this.canvas.style.height = h + 'px';
   }
 
   setMode(m) {
@@ -220,6 +278,7 @@ export class Game {
     this.cutsceneIdx = 0;
     this._cutsceneShow();
     this.state = 'cutscene';
+    this._acquireWakeLock();
     this.clock.getDelta();
   }
 
@@ -256,6 +315,7 @@ export class Game {
     if (this.state!=='paused') return;
     this.overlayPause.classList.add('hidden');
     this.state='playing';
+    this._acquireWakeLock();
     this.clock.getDelta();
   }
   restart() {
@@ -290,7 +350,10 @@ export class Game {
   _updateCamera(delta) {
     const targetX = this.player ? this.player.currentX * 0.35 : 0;
     const targetY = 3.25 + (this.player ? this.player.y * 0.22 : 0);
-    const baseZ = 7.2;
+    // на узком портретном экране отъезжаем и расширяем FOV, иначе крайние дорожки обрежет
+    const narrow = this.camera.aspect < 0.9;
+    const baseZ = narrow ? 8.4 : 7.2;
+    const fovBoost = THREE.MathUtils.clamp(0.95 / this.camera.aspect, 1, 1.32);
     // smooth follow
     const camX = THREE.MathUtils.lerp(this.camera.position.x, targetX, Math.min(1, delta*4));
     const camY = THREE.MathUtils.lerp(this.camera.position.y, targetY, Math.min(1, delta*4));
@@ -301,7 +364,7 @@ export class Game {
     // slight FOV boost with speed
     if (this.level) {
       const speedFactor = (this.level.speed - this.level.baseSpeed) / (this.level.maxSpeed - this.level.baseSpeed);
-      this.camera.fov = 68 + speedFactor*6;
+      this.camera.fov = (68 + speedFactor*6) * fovBoost;
       this.camera.updateProjectionMatrix();
     }
   }
@@ -331,6 +394,10 @@ export class Game {
   animate() {
     requestAnimationFrame(()=>this.animate());
     const delta = Math.min(this.clock.getDelta(), 0.033);
+    // состояние в body: CSS показывает тач-кнопки только во время игры
+    if (document.body.dataset.state !== this.state) {
+      document.body.dataset.state = this.state;
+    }
 
     if (this.state==='playing' && this.level && this.player && this.guard) {
       this.level.update(delta, this.camera, this.player, this.guard);
