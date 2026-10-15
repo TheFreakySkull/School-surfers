@@ -1,0 +1,16 @@
+# macOS
+.DS_Store
+
+# Node (тестовые стабы, если понадобятся)
+node_modules/
+package-lock.json
+
+# Редакторы и IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Логи
+*.log

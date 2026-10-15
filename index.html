@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>School Surfers — Побег из школы</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script async src="https://unpkg.com/es-module-shims@1.8.0/dist/es-module-shims.js"></script>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <canvas id="gameCanvas"></canvas>
+
+  <!-- HUD -->
+  <div id="hud">
+    <div id="hud-top">
+      <div class="hud-block">
+        <span class="hud-label">Счёт</span>
+        <span id="score" class="hud-value">0</span>
+      </div>
+      <div class="hud-block">
+        <span class="hud-label">Монеты</span>
+        <span id="coins" class="hud-value">0 <small style="font-size:0.6em;opacity:0.7">/ сигарет</small></span>
+      </div>
+      <div class="hud-block">
+        <span class="hud-label">Бутылок</span>
+        <span id="vodka" class="hud-value">0</span>
+      </div>
+      <div class="hud-block">
+        <span class="hud-label">Рекорд</span>
+        <span id="best" class="hud-value">0</span>
+      </div>
+    </div>
+    <div id="multiplier" class="hidden">x2 <span>ускорение!</span></div>
+    <div id="guard-bar">
+      <div id="guard-bar-fill"></div>
+      <span id="guard-bar-text">ГЕНДОС</span>
+    </div>
+    <div id="event-banner" class="hidden"></div>
+  </div>
+
+  <!-- Start screen -->
+  <div id="overlay-start" class="overlay">
+    <div class="overlay-card">
+      <h1>SCHOOL SURFERS</h1>
+      <p class="subtitle">Максоген сбегает от Гендоса по коридорам школы!</p>
+      <div class="legend">
+        <div class="legend-row"><span class="legend-icon">😌→😱</span> Максоген: person1 спокоен … person4 паника — чем ближе Гендос, тем выше версия!</div>
+        <div class="legend-row"><span class="legend-icon">😠</span> Гендос: guard1 спокойный → sticker напряжён → guard2 злой с пистолетом!</div>
+        <div class="legend-row"><span class="legend-icon">🚬</span> Сигарета <b>+10</b> очков — обычная</div>
+        <div class="legend-row"><span class="legend-icon">🍾</span> Бутылка <b>+50</b> + щит 5с + отброс Гендоса!</div>
+        <div class="legend-row"><span class="legend-icon">🔫</span> Гендос стреляет! Уйди с прицельной дорожки или <b>пригнись</b> (S/↓) — за уворот +25!</div>
+        <div class="legend-row"><span class="legend-icon" style="background:#8B4513"></span> Парта / книги — <b>прыжок</b> (W / ↑ / Space)</div>
+        <div class="legend-row"><span class="legend-icon" style="background:#4169E1"></span> Шкаф — только <b>объезд</b> (A/D ←→)</div>
+        <div class="legend-row"><span class="legend-icon" style="background:#DC143C"></span> Турник — <b>подкат</b> (S / ↓)</div>
+      </div>
+      <div class="mode-row">
+        <button class="mode-btn" data-mode="normal">🟢 НОРМА</button>
+        <button class="mode-btn" data-mode="hard">🟡 СЛОЖНО</button>
+        <button class="mode-btn" data-mode="impossible">🔴 НЕВОЗМОЖНО</button>
+      </div>
+      <button id="btn-play" class="btn-primary">ИГРАТЬ ▶</button>
+      <p class="hint">Управление: A/D или ← → — смена дорожки, W/↑/Space — прыжок, S/↓ — подкат. Свайп на телефоне.</p>
+      <div id="loading">Загрузка ассетов...</div>
+    </div>
+  </div>
+
+  <!-- Cutscene: туалет -->
+  <div id="overlay-cutscene" class="overlay hidden">
+    <div class="overlay-card cutscene-card">
+      <div class="cut-scene-label">🚻 ШКОЛЬНЫЙ ТУАЛЕТ • ЗА 5 СЕКУНД ДО ПОБЕГА...</div>
+      <div class="cut-stage">
+        <img id="cut-img" src="sprites/guard1.png" alt="персонаж">
+      </div>
+      <div id="cut-name" class="cut-name gendos">ГЕНДОС</div>
+      <p id="cut-text" class="cut-text">...</p>
+      <div class="cut-btns">
+        <button id="btn-cut-next" class="btn-primary">ДАЛЕЕ ▶</button>
+        <button id="btn-cut-skip" class="btn-ghost">Пропустить ⏩</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Game Over -->
+  <div id="overlay-gameover" class="overlay hidden">
+    <div class="overlay-card">
+      <h2 id="go-title">ПОЙМАН!</h2>
+      <p id="go-reason">Гендос догнал Максогена</p>
+      <div class="stats">
+        <div>Счёт: <b id="go-score">0</b></div>
+        <div>Сигарет: <b id="go-coins">0</b> | Бутылок: <b id="go-vodka">0</b></div>
+        <div>Дистанция: <b id="go-dist">0</b> м | Режим: <b id="go-mode">НОРМА</b></div>
+      </div>
+      <button id="btn-restart" class="btn-primary">ЗАНОВО ↻</button>
+    </div>
+  </div>
+
+  <!-- Pause -->
+  <div id="overlay-pause" class="overlay hidden">
+    <div class="overlay-card">
+      <h2>ПАУЗА</h2>
+      <button id="btn-resume" class="btn-primary">ПРОДОЛЖИТЬ</button>
+    </div>
+  </div>
+
+  <!-- Mobile controls -->
+  <div id="mobile-controls">
+    <div class="mc-row">
+      <button class="mc-btn" id="mc-left">◀</button>
+      <button class="mc-btn" id="mc-right">▶</button>
+    </div>
+    <div class="mc-row">
+      <button class="mc-btn" id="mc-jump">▲ прыжок</button>
+      <button class="mc-btn" id="mc-slide">▼ подкат</button>
+    </div>
+  </div>
+
+  <div id="hit-flash"></div>
+  <div id="tunnel-vignette" class="hidden"></div>
+
+  <script type="module">
+    import { Game } from './js/main.js';
+    const game = new Game();
+    game.init();
+  </script>
+</body>
+</html>
