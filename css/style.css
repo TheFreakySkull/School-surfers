@@ -39,7 +39,13 @@ html, body {
   width:40px; height:40px; border-radius:12px; border:1px solid rgba(255,255,255,0.2);
   background:rgba(0,0,0,0.6); color:#fff; font-size:20px; cursor:pointer;
 }
-@media (pointer: coarse) { #btn-fs { display:block; } }
+#btn-pause {
+  display:none; pointer-events:auto; position:absolute;
+  top:calc(52px + env(safe-area-inset-top)); right:calc(58px + env(safe-area-inset-right));
+  width:40px; height:40px; border-radius:12px; border:1px solid rgba(255,255,255,0.2);
+  background:rgba(0,0,0,0.6); color:#fff; font-size:18px; cursor:pointer;
+}
+@media (pointer: coarse) { #btn-fs, #btn-pause { display:block; } }
 
 #multiplier { position:absolute; left:50%; top:72px; transform:translateX(-50%); background: linear-gradient(90deg,#ff3b30,#ffcc00); color:#fff; font-weight:900; font-size:22px; padding:6px 18px; border-radius:999px; box-shadow:0 6px 18px rgba(0,0,0,0.4); display:flex; gap:8px; align-items:center; animation: pulse 0.6s infinite alternate; }
 #multiplier span { font-size:12px; font-weight:700; letter-spacing:0.08em; }
@@ -57,6 +63,10 @@ html, body {
 .overlay-card h2 { font-size:30px; }
 .subtitle { color:var(--muted); margin:6px 0 16px; font-weight:600; }
 .legend { text-align:left; background:var(--soft-bg); border-radius:14px; padding:14px; margin:14px 0; display:flex; flex-direction:column; gap:8px; font-size:14px; }
+.legend summary { cursor:pointer; font-weight:800; font-size:13px; color:var(--muted); list-style:none; }
+.legend summary::-webkit-details-marker { display:none; }
+.legend summary::before { content:'▼ '; font-size:10px; }
+details.legend:not([open]) summary::before { content:'▶ '; }
 .legend-row { display:flex; align-items:center; gap:8px; }
 .legend-icon { width:22px; height:22px; border-radius:6px; display:inline-flex; align-items:center; justify-content:center; font-size:14px; flex-shrink:0; border:1px solid rgba(0,0,0,0.08); }
 .btn-primary { margin-top:12px; background:var(--btn-bg); color:var(--btn-text); border:none; padding:14px 28px; border-radius:var(--btn-radius); font-size:18px; font-weight:800; cursor:pointer; transition: transform 0.15s, background 0.15s; width:100%; font-family:var(--font); }
@@ -93,6 +103,9 @@ body[data-state="playing"] #mobile-controls { display:flex; }
 @media (pointer: coarse) {
   .hint-desktop { display:none; }
   .hint-touch { display:block; }
+  /* блюр на весь экран жрёт батарею и FPS — на тачах плоские фоны */
+  .overlay { backdrop-filter:none; -webkit-backdrop-filter:none; background:rgba(0,0,0,0.72); }
+  .hud-block { backdrop-filter:none; -webkit-backdrop-filter:none; }
 }
 
 #hit-flash { position:absolute; inset:0; background: rgba(255,0,0,0.0); pointer-events:none; transition: background 0.1s; z-index:7; }
@@ -142,12 +155,23 @@ body[data-state="playing"] #mobile-controls { display:flex; }
   .mode-btn { font-size:10px; padding:8px 2px; }
   .cut-stage { height:180px; }
   #cut-img { height:160px; }
-  #guard-bar { width:130px; height:20px; top:calc(10px + env(safe-area-inset-top)); }
-  #multiplier { top:64px; font-size:18px; }
+  /* HUD в одну прокручиваемую строку, полоска Гендоса — под ней слева */
+  #hud-top { flex-wrap:nowrap; overflow-x:auto; gap:6px; scrollbar-width:none; }
+  #hud-top::-webkit-scrollbar { display:none; }
+  .hud-block { min-width:0; flex:0 0 auto; padding:5px 10px; }
+  #guard-bar { width:130px; height:20px; top:calc(66px + env(safe-area-inset-top)); right:auto; left:12px; }
+  #btn-fs { top:calc(60px + env(safe-area-inset-top)); }
+  #btn-pause { top:calc(60px + env(safe-area-inset-top)); }
+  #multiplier { top:98px; font-size:18px; }
   #event-banner {
-    top:104px; font-size:13px; padding:8px 14px;
+    top:134px; font-size:13px; padding:8px 14px;
     white-space:normal; text-align:center; line-height:1.3;
   }
+  #duel-prompt { font-size:52px; }
+}
+@media (max-width: 380px) {
+  .mode-btn { font-size:9px; }
+  .cut-btns { flex-direction:column; }
 }
 /* Низкие экраны (альбомная ориентация телефона): карточка скроллится */
 @media (max-height: 500px) {
@@ -160,6 +184,14 @@ body[data-state="playing"] #mobile-controls { display:flex; }
 @media (min-width: 900px) and (pointer: fine) {
   #mobile-controls { display:none !important; }
 }
+
+#gl-error {
+  position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+  z-index:50; background:rgba(0,0,0,0.85); color:#fff; font-weight:700;
+  padding:20px 26px; border-radius:16px; text-align:center; line-height:1.6;
+  border:2px solid #e74c3c; max-width:88vw;
+}
+#gl-error.hidden { display:none; }
 
 /* ============ EXTRAS-книга (FNAF-стайл) ============ */
 .book { max-width:640px; }

@@ -65,7 +65,15 @@ export class AssetManager {
             else if (item.kind === 'coin1') this.textures.coin1 = tex;
             else if (item.kind === 'coin2') this.textures.coin2 = tex;
             else if (item.kind === 'sergey') this.textures.sergey = tex;
-            else if (item.kind === 'skybox') this.textures.skyboxList[item.idx] = tex;
+            else if (item.kind === 'skybox') {
+              // на тачах фоны жмём до 640px — экрану хватает, а видеопамяти в 4 раза легче
+              let t = tex;
+              try {
+                const coarse = window.matchMedia('(pointer: coarse)').matches;
+                if (coarse && tex.image && tex.image.width > 700) t = downscale(tex.image, 640);
+              } catch { /* оставляем как есть */ }
+              this.textures.skyboxList[item.idx] = t;
+            }
             done();
           },
           undefined,
@@ -88,4 +96,18 @@ export class AssetManager {
     const n = this.textures.guard.length;
     return this.textures.guard[((i % n) + n) % n] || null;
   }
+}
+
+// ужатие картинки под малую ширину с сохранением пропорций (без библиотек)
+function downscale(img, targetW) {
+  const c = document.createElement('canvas');
+  const k = targetW / img.width;
+  c.width = targetW;
+  c.height = Math.round(img.height * k);
+  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.minFilter = THREE.LinearFilter;
+  t.magFilter = THREE.LinearFilter;
+  return t;
 }

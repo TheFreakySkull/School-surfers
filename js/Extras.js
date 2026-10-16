@@ -42,6 +42,7 @@ export class Extras {
     this.presets = null;
     this.onPlayCustom = null;
     this.bookOpen = false;
+    this.tab = 'models';
     this.models = [];
     this.modelIdx = 0;
     this.values = {};
@@ -132,8 +133,10 @@ export class Extras {
   _ensureViewer() {
     if (this.renderer) return;
     const canvas = document.getElementById('extra-canvas');
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    // вьювер маленький — на тачах режем качество ради FPS и памяти
+    const coarse = window.matchMedia('(pointer: coarse)').matches;
+    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: !coarse, alpha: true, stencil: false });
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, coarse ? 1 : 1.5));
     this.scene = new THREE.Scene();
     this.scene.add(new THREE.HemisphereLight(0xffffff, 0x444466, 1.0));
     const dir = new THREE.DirectionalLight(0xffffff, 1.2);
@@ -170,7 +173,8 @@ export class Extras {
     canvas.addEventListener('pointercancel', stop);
     const loop = () => {
       requestAnimationFrame(loop);
-      if (!this.bookOpen) return;
+      // рендерим только открытую вкладку моделей — второй WebGL-контекст не должен жечь батарею
+      if (!this.bookOpen || this.tab !== 'models') return;
       if (!this.dragging && Date.now() - this.lastDrag > 2000) {
         this.turntable.rotation.y += 0.012;
       }
@@ -302,6 +306,7 @@ export class Extras {
 
   open(tab = 'models') {
     this.bookOpen = true;
+    this.tab = tab;
     document.getElementById('overlay-extra').classList.remove('hidden');
     document.querySelectorAll('.book-tab[data-tab]').forEach(b => {
       b.classList.toggle('selected', b.dataset.tab === tab);

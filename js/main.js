@@ -46,6 +46,10 @@ export class Game {
     // тема интерфейса — сразу, чтобы не мигало
     try { document.body.dataset.theme = localStorage.getItem('school_theme') || 'default'; }
     catch { document.body.dataset.theme = 'default'; }
+    // на тачах легенда свернута сразу (иначе стартовый экран — простыня)
+    if (this.isMobile) {
+      document.querySelector('.legend')?.removeAttribute('open');
+    }
 
     this.state = 'loading'; // loading, menu, cutscene, playing, paused, gameover
     this.best = parseInt(localStorage.getItem('school_best') || '0', 10);
@@ -120,6 +124,17 @@ export class Game {
     } catch { /* не поддерживается — просто играем */ }
   }
 
+  _showGlError() {
+    let el = document.getElementById('gl-error');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'gl-error';
+      el.innerHTML = '😵 Видеокарта телефона устала.<br>Закрой лишние вкладки и <a href="" style="color:#ffdd33">обнови страницу</a>';
+      document.body.appendChild(el);
+    }
+    el.classList.remove('hidden');
+  }
+
   _toggleFullscreen() {
     try {
       if (document.fullscreenElement || document.webkitFullscreenElement) {
@@ -164,17 +179,44 @@ export class Game {
       else btnFs.addEventListener('click', () => this._toggleFullscreen());
     }
 
+    // тач-пауза: на телефоне клавиатуры нет
+    const bindTap = (id, fn) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      let lastTouch = 0;
+      el.addEventListener('touchstart', (e) => { e.preventDefault(); lastTouch = Date.now(); fn(); }, { passive: false });
+      el.addEventListener('click', () => { if (Date.now() - lastTouch > 600) fn(); });
+    };
+    bindTap('btn-pause', () => {
+      if (this.state === 'playing') this.pause();
+      else if (this.state === 'paused') this.resume();
+    });
+
+    // если мобильный GPU роняет контекст — не чёрный экран, а понятная плашка
+    this.canvas.addEventListener('webglcontextlost', (e) => {
+      e.preventDefault();
+      this._showGlError();
+    });
+    this.canvas.addEventListener('webglcontextrestored', () => {
+      document.getElementById('gl-error')?.classList.add('hidden');
+      this._resize();
+    });
+
     window.addEventListener('keydown', (e) => this._onKey(e));
 
-    // mobile buttons
-    document.getElementById('mc-left').addEventListener('touchstart', (e)=>{e.preventDefault(); this._tryMove(-1);}, {passive:false});
-    document.getElementById('mc-right').addEventListener('touchstart', (e)=>{e.preventDefault(); this._tryMove(1);}, {passive:false});
-    document.getElementById('mc-jump').addEventListener('touchstart', (e)=>{e.preventDefault(); this._tryJump();}, {passive:false});
-    document.getElementById('mc-slide').addEventListener('touchstart', (e)=>{e.preventDefault(); this._trySlide();}, {passive:false});
-    document.getElementById('mc-left').addEventListener('click', ()=>this._tryMove(-1));
-    document.getElementById('mc-right').addEventListener('click', ()=>this._tryMove(1));
-    document.getElementById('mc-jump').addEventListener('click', ()=>this._tryJump());
-    document.getElementById('mc-slide').addEventListener('click', ()=>this._trySlide());
+    // mobile buttons: touchstart + click-фолбэк, но не оба сразу.
+    // На части андроидов preventDefault не давит синтетический click —
+    // без метки времени дуэль получала бы два ввода и проигрывалась сама.
+    const bindMc = (id, fn) => {
+      const el = document.getElementById(id);
+      let lastTouch = 0;
+      el.addEventListener('touchstart', (e) => { e.preventDefault(); lastTouch = Date.now(); fn(); }, { passive: false });
+      el.addEventListener('click', () => { if (Date.now() - lastTouch > 600) fn(); });
+    };
+    bindMc('mc-left', () => this._tryMove(-1));
+    bindMc('mc-right', () => this._tryMove(1));
+    bindMc('mc-jump', () => this._tryJump());
+    bindMc('mc-slide', () => this._trySlide());
 
     // swipe
     let sx=0, sy=0;
@@ -299,6 +341,10 @@ export class Game {
       b.addEventListener('click', () => this.setMode(b.dataset.mode));
     });
     this.setMode('normal');
+    // на тачах легенда свернута по умолчанию — иначе стартовый экран это простыня
+    if (this.isMobile) {
+      document.querySelector('.legend')?.removeAttribute('open');
+    }
     // EXTRAS-книга
     this.extras.init(this.assetManager, MODES);
     this.extras.onPlayCustom = () => {
