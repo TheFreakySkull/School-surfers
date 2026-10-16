@@ -41,6 +41,10 @@
         <span class="hud-label">Рекорд</span>
         <span id="best" class="hud-value">0</span>
       </div>
+      <div class="hud-block">
+        <span class="hud-label">Здоровье</span>
+        <span id="hp" class="hud-value">❤❤❤❤❤</span>
+      </div>
     </div>
     <div id="multiplier" class="hidden">x2 <span>ускорение!</span></div>
     <div id="guard-bar">
@@ -55,13 +59,17 @@
   <div id="overlay-start" class="overlay">
     <div class="overlay-card">
       <h1>SCHOOL SURFERS</h1>
-      <p class="subtitle">Максоген сбегает от Гендоса по коридорам школы!</p>
+      <p class="subtitle">Учитель географии сбегает от обжэшника по коридорам школы!</p>
       <div class="legend">
         <div class="legend-row"><span class="legend-icon">😌→😱</span> Максоген: person1 спокоен … person4 паника — чем ближе Гендос, тем выше версия!</div>
         <div class="legend-row"><span class="legend-icon">😠</span> Гендос: guard1 спокойный → sticker напряжён → guard2 злой с пистолетом!</div>
         <div class="legend-row"><span class="legend-icon">🚬</span> Сигарета <b>+10</b> очков — обычная</div>
-        <div class="legend-row"><span class="legend-icon">🍾</span> Бутылка <b>+50</b> + щит 5с + отброс Гендоса!</div>
+        <div class="legend-row"><span class="legend-icon">🍾</span> Бутылка — одна, только когда шкала Гендоса почти на нуле: <b>+50</b>, щит и отброс!</div>
         <div class="legend-row"><span class="legend-icon">🔫</span> Гендос стреляет! Уйди с прицельной дорожки или <b>пригнись</b> (S/↓) — за уворот +25!</div>
+        <div class="legend-row"><span class="legend-icon">🚗</span> Форд Игнатьевича! Уходи с его дорожки — <b>задавит насмерть</b>, он ещё и подруливает!</div>
+        <div class="legend-row"><span class="legend-icon">🔫</span> Ствол сразу на всех полосах: стоп, камера за спину, <b>дуэль</b> — жми показанные кнопки за 3 раунда, ошибка = смерть!</div>
+        <div class="legend-row"><span class="legend-icon">❤</span> Здоровье: 5 ударов о преграды — конец рана!</div>
+        <div class="legend-row"><span class="legend-icon">🕳</span> Люк — туннель на 6с | <span class="legend-icon">🚀</span> Джетпак — полёт за монетами 6с</div>
         <div class="legend-row"><span class="legend-icon" style="background:#8B4513"></span> Парта / книги — <b>прыжок</b> (W / ↑ / Space)</div>
         <div class="legend-row"><span class="legend-icon" style="background:#4169E1"></span> Шкаф — только <b>объезд</b> (A/D ←→)</div>
         <div class="legend-row"><span class="legend-icon" style="background:#DC143C"></span> Турник — <b>подкат</b> (S / ↓)</div>
@@ -70,8 +78,10 @@
         <button class="mode-btn" data-mode="normal">🟢 НОРМА</button>
         <button class="mode-btn" data-mode="hard">🟡 СЛОЖНО</button>
         <button class="mode-btn" data-mode="impossible">🔴 НЕВОЗМОЖНО</button>
+        <button class="mode-btn" data-mode="custom">🎲 СВОЙ</button>
       </div>
       <button id="btn-play" class="btn-primary">ИГРАТЬ ▶</button>
+      <button id="btn-extra" class="btn-ghost" style="width:100%">📖 EXTRAS: модели, свой ран, темы</button>
       <p class="hint hint-desktop">Управление: A/D или ← → — смена дорожки, W/↑/Space — прыжок, S/↓ — подкат.</p>
       <p class="hint hint-touch">Управление: кнопки ◀ ▶ ▲ ▼ по краям экрана или свайпы. Лучше играть вертикально 📱</p>
       <div id="loading">Загрузка ассетов...</div>
@@ -83,13 +93,55 @@
     <div class="overlay-card cutscene-card">
       <div class="cut-scene-label">🚻 ШКОЛЬНЫЙ ТУАЛЕТ • ЗА 5 СЕКУНД ДО ПОБЕГА...</div>
       <div class="cut-stage">
-        <img id="cut-img" src="sprites/guard1.png" alt="персонаж">
+        <img id="cut-img" src="sprites/gendos/guard1.png" alt="персонаж">
       </div>
       <div id="cut-name" class="cut-name gendos">ГЕНДОС</div>
       <p id="cut-text" class="cut-text">...</p>
       <div class="cut-btns">
         <button id="btn-cut-next" class="btn-primary">ДАЛЕЕ ▶</button>
         <button id="btn-cut-skip" class="btn-ghost">Пропустить ⏩</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- EXTRAS: книга FNAF-стайл -->
+  <div id="overlay-extra" class="overlay hidden">
+    <div class="overlay-card book">
+      <div class="book-tabs">
+        <button class="book-tab selected" data-tab="models">📖 Модели</button>
+        <button class="book-tab" data-tab="custom">🎲 Свой ран</button>
+        <button class="book-tab" data-tab="themes">🎨 Тема</button>
+        <button class="book-tab-close" id="btn-extra-close" aria-label="Закрыть">✕</button>
+      </div>
+      <div class="book-page" id="tab-models">
+        <div class="book-spread">
+          <div class="book-left">
+            <canvas id="extra-canvas"></canvas>
+            <div class="book-nav">
+              <button id="model-prev" aria-label="Назад">◀</button>
+              <span id="model-count">1/14</span>
+              <button id="model-next" aria-label="Вперёд">▶</button>
+            </div>
+            <div class="book-hint">тащи по картинке, чтобы покрутить 👆</div>
+          </div>
+          <div class="book-right">
+            <h3 id="model-name">...</h3>
+            <p id="model-desc">...</p>
+            <div id="model-tags"></div>
+          </div>
+        </div>
+      </div>
+      <div class="book-page hidden" id="tab-custom">
+        <div class="custom-row" id="custom-controls"></div>
+        <div class="custom-presets">
+          <button class="mode-btn" data-preset="normal">🟢 Норма</button>
+          <button class="mode-btn" data-preset="hard">🟡 Сложно</button>
+          <button class="mode-btn" data-preset="impossible">🔴 Невозможно</button>
+        </div>
+        <button id="btn-custom-play" class="btn-primary">ИГРАТЬ СО СВОИМИ ▶</button>
+      </div>
+      <div class="book-page hidden" id="tab-themes">
+        <div id="theme-list"></div>
       </div>
     </div>
   </div>
@@ -130,6 +182,14 @@
 
   <div id="hit-flash"></div>
   <div id="tunnel-vignette" class="hidden"></div>
+
+  <!-- QTE-подсказка дуэли -->
+  <div id="duel-overlay" class="hidden">
+    <div id="duel-title">ДУЭЛЬ С ГЕНДОСОМ</div>
+    <div id="duel-prompt">◀</div>
+    <div id="duel-timer"><div id="duel-timer-fill"></div></div>
+    <div id="duel-round">Раунд 1/3</div>
+  </div>
 
   <script type="module">
     import { Game } from './js/main.js';

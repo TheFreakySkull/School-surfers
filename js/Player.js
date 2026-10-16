@@ -66,8 +66,20 @@ export class Player {
     this.MODE_TIME = 6.0;
     this.yOff = 0; // сглаженное смещение подуровня
 
+    // перестрелка с Гендосом: spin — разворот на 360, inDuel — стойка дуэли
+    // (раундами рулит js/Duel.js, Level дёргает player.inDuel)
+    this.spin = 0;
+    this.spinAngle = 0;
+    this.duel = 0;
+    this.mirrored = false; // спрайт зеркалится — Максоген развернулся к Гендосу
+    this.inDuel = false;
+
     // invulnerability after hit
     this.invuln = 0;
+
+    // здоровье: 5 ударов — проигрыш
+    this.maxHp = 5;
+    this.hp = this.maxHp;
 
     // visual lean
     this.lean = 0;
@@ -92,9 +104,28 @@ export class Player {
     if (this.isJumping || this.isSliding) return;
     this.isSliding = true;
     this.slideTimer = this.slideDuration;
-    // visual: squash sprite
-    this.sprite.scale.set(2.0, 1.25, 1);
+    // visual: squash sprite (с учётом зеркала дуэли)
+    this.sprite.scale.set(this._baseScaleX(), 1.25, 1);
     this.sprite.position.y = -0.45;
+  }
+
+  _baseScaleX() { return this.mirrored ? -2.0 : 2.0; }
+
+  // подобрать ствол: разворот на 360 с неуязвимостью, затем стойка дуэли
+  // (раунды ведёт Duel: Level выставляет inDuel и гасит через cancelDuel)
+  startDuel() {
+    if (this.mode !== 'run' || this.inDuel || this.spin > 0) return false;
+    this.spin = 0.8;
+    this.spinAngle = 0;
+    this.invuln = Math.max(this.invuln, 1.0);
+    return true;
+  }
+
+  cancelDuel() {
+    this.duel = 0;
+    this.spin = 0;
+    this.mirrored = false;
+    this.inDuel = false;
   }
 
   enterTunnel() {
@@ -114,7 +145,10 @@ export class Player {
   hit() {
     this.invuln = 1.1;
     this.stressBoost = 1.0; // лицо сразу в панику после удара
+    this.hp = Math.max(0, this.hp - 1);
   }
+
+  get alive() { return this.hp > 0; }
 
   // guardDistance: дистанция Гендоса (1.1 поймал ... 8.0 далеко)
   setStressFromGuard(guardDistance) {
@@ -140,6 +174,21 @@ export class Player {
       }
     }
     this.yOff = THREE.MathUtils.lerp(this.yOff, this.MODE_Y[this.mode], Math.min(1, delta * 3.2));
+
+    // разворот на 360: ровно 2π за 0.8с, затем стойка дуэли
+    // (конец дуэли — через cancelDuel из Level)
+    if (this.spin > 0) {
+      this.spin -= delta;
+      this.spinAngle += delta * (Math.PI * 2 / 0.8);
+      this.sprite.material.rotation = this.spinAngle;
+      if (this.spin <= 0) {
+        this.spinAngle = 0;
+        this.mirrored = true;
+        this.inDuel = true;
+      }
+    } else {
+      this.sprite.material.rotation = this.lean;
+    }
     // invuln blink
     if (this.invuln > 0) {
       this.invuln -= delta;
@@ -155,7 +204,7 @@ export class Player {
     // lean based on diff
     const diff = this.targetX - this.currentX;
     this.lean = THREE.MathUtils.lerp(this.lean, diff * 0.22, delta * 10);
-    this.sprite.material.rotation = this.lean; // sprite rotation
+    // поворот спрайта выставляется ниже: спин 360 / дуэль / обычный наклон
     this.group.position.x = this.currentX;
 
     // jump physics
@@ -180,7 +229,9 @@ export class Player {
       }
     }
 
-    this.group.position.y = this.baseY + this.y + this.yOff;
+    // подскок во время разворота на 360
+    const hop = this.spin > 0 ? Math.sin((0.8 - this.spin) / 0.8 * Math.PI) * 0.8 : 0;
+    this.group.position.y = this.baseY + this.y + this.yOff + hop;
 
     // тень: в полёте прячем (земля далеко), в туннеле лежит на нижнем полу
     this.shadow.visible = this.mode !== 'fly';
@@ -199,7 +250,7 @@ export class Player {
     const bob = Math.sin(this.runPhase) * (0.03 + this.stress * 0.02);
     const breathe = 1 + Math.sin(this.runPhase * 0.5) * 0.012;
     if (!this.isSliding) {
-      this.sprite.scale.set(2.0 * breathe, 2.4 / breathe, 1);
+      this.sprite.scale.set(this._baseScaleX() * breathe, 2.4 / breathe, 1);
       this.sprite.position.y = 0.15 + bob + (this.isJumping ? 0.1 : 0);
     }
     // паника: тряска спрайта когда стресс высокий
@@ -244,6 +295,13 @@ export class Player {
     this.mode = 'run';
     this.modeTimer = 0;
     this.yOff = 0;
+    this.spin = 0;
+    this.spinAngle = 0;
+    this.duel = 0;
+    this.mirrored = false;
+    this.inDuel = false;
+    this.hp = this.maxHp;
+    this.sprite.material.rotation = 0;
     this.isJumping = false;
     this.isSliding = false;
     this.slideTimer = 0;

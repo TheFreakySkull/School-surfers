@@ -50,11 +50,13 @@ export class Guard {
 
     this.stun = 0;
     this.anger = 0;
+    this.hitFlash = 0; // белое мигание при попадании Максогена в дуэли
 
     // параметры сложности (переопределяются через applyMode)
     this.chaseBase = 0.28;
     this.chaseAnger = 1.2;
     this.hitPenalty = 1.35;
+    this.chaseBonus = 0; // Level добавляет со временем — Гендос злее
   }
 
   applyMode(opts) {
@@ -69,7 +71,7 @@ export class Guard {
     const frozen = player.mode && player.mode !== 'run';
     if (this.stun > 0) this.stun -= delta;
     else if (!frozen) {
-      const chase = this.chaseBase + this.anger * this.chaseAnger;
+      const chase = this.chaseBase + this.chaseBonus + this.anger * this.chaseAnger;
       this.distance -= chase * delta;
       if (this.anger < 0.1) this.distance += 0.12 * delta;
     }
@@ -110,10 +112,15 @@ export class Guard {
     const bob = Math.sin(this.runPhase) * (0.05 + this.rage * 0.04);
     this.sprite.position.y = 0.2 + bob;
 
-    // злой Гендос больше и краснее
+    // злой Гендос больше и краснее; белое мигание — в него попали
     const grow = 1 + this.rage * 0.12;
     this.sprite.scale.set(2.15 * grow, 2.6 * grow, 1);
-    this.spriteMat.color.setHSL(0, this.rage * 0.45, 1 - this.rage * 0.12);
+    if (this.hitFlash > 0) {
+      this.hitFlash -= delta;
+      this.spriteMat.color.setHSL(0, 0, 1);
+    } else {
+      this.spriteMat.color.setHSL(0, this.rage * 0.45, 1 - this.rage * 0.12);
+    }
     if (this.rage > 0.75 && this.forceTimer <= 0) {
       this.sprite.position.x = (Math.random() - 0.5) * 0.09;
     } else {
@@ -147,6 +154,13 @@ export class Guard {
     this.stun = 1.0;
   }
 
+  // Максоген попал в дуэли: отброс + обнуление злости + вспышка
+  onDuelHit() {
+    this.distance = Math.min(this.FAR, this.distance + 0.7);
+    this.anger = 0;
+    this.hitFlash = 0.22;
+  }
+
   isCaught() {
     return this.distance <= this.catchDistance;
   }
@@ -154,6 +168,8 @@ export class Guard {
   reset() {
     this.distance = this.START_DIST;
     this.anger = 0;
+    this.chaseBonus = 0;
+    this.hitFlash = 0;
     this.rage = 0;
     this.rageLevel = 0;
     this.runPhase = 0;

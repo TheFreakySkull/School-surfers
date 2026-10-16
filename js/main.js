@@ -3,12 +3,15 @@ import { AssetManager } from './AssetsManager.js';
 import { Player } from './Player.js';
 import { Guard } from './Guard.js';
 import { Level } from './Level.js';
+import { Skybox } from './Skybox.js';
+import { sfx } from './sfx.js';
+import { Extras } from './Extras.js';
 
 // Режимы сложности: НОРМА / СЛОЖНО / НЕВОЗМОЖНО
 const MODES = {
-  normal:     { label:'НОРМА', baseSpeed:12, maxSpeed:24, gapMin:6, gapMax:12, doubleChance:0.18, shootMin:10, shootMax:18, warnTime:1.1, coinProb:0.45, vodkaProb:0.12, coinLineLen:2, wavyProb:0.25, chaseBase:0.28, chaseAnger:1.2, hitPenalty:1.35, bulletKill:false },
-  hard:       { label:'СЛОЖНО', baseSpeed:15, maxSpeed:30, gapMin:5, gapMax:10, doubleChance:0.28, shootMin:7, shootMax:12, warnTime:1.0, coinProb:0.35, vodkaProb:0.10, coinLineLen:2, wavyProb:0.20, chaseBase:0.45, chaseAnger:1.4, hitPenalty:1.80, bulletKill:false },
-  impossible: { label:'НЕВОЗМОЖНО', baseSpeed:19, maxSpeed:36, gapMin:4.5, gapMax:8, doubleChance:0.38, shootMin:5, shootMax:9, warnTime:0.8, coinProb:0.28, vodkaProb:0.08, coinLineLen:1, wavyProb:0.15, chaseBase:0.65, chaseAnger:1.6, hitPenalty:2.40, bulletKill:true },
+  normal:     { label:'НОРМА', baseSpeed:12, maxSpeed:24, gapMin:6, gapMax:12, doubleChance:0.18, shootMin:10, shootMax:18, warnTime:1.1, coinPatternP:0.38, arcP:0.45, carMin:26, carMax:38, mercyDist:2.2, chaseBase:0.28, chaseAnger:1.2, hitPenalty:1.35, bulletKill:false },
+  hard:       { label:'СЛОЖНО', baseSpeed:15, maxSpeed:30, gapMin:5, gapMax:10, doubleChance:0.28, shootMin:7, shootMax:12, warnTime:1.0, coinPatternP:0.32, arcP:0.40, carMin:20, carMax:30, mercyDist:1.9, chaseBase:0.45, chaseAnger:1.4, hitPenalty:1.80, bulletKill:false },
+  impossible: { label:'НЕВОЗМОЖНО', baseSpeed:19, maxSpeed:36, gapMin:4.5, gapMax:8, doubleChance:0.38, shootMin:5, shootMax:9, warnTime:0.8, coinPatternP:0.26, arcP:0.35, carMin:16, carMax:26, mercyDist:1.7, chaseBase:0.65, chaseAnger:1.6, hitPenalty:2.40, bulletKill:true },
 };
 
 export class Game {
@@ -40,15 +43,20 @@ export class Game {
     this.guard = null;
     this.level = null;
 
+    // тема интерфейса — сразу, чтобы не мигало
+    try { document.body.dataset.theme = localStorage.getItem('school_theme') || 'default'; }
+    catch { document.body.dataset.theme = 'default'; }
+
     this.state = 'loading'; // loading, menu, cutscene, playing, paused, gameover
     this.best = parseInt(localStorage.getItem('school_best') || '0', 10);
     this.mode = 'normal';
+    this.extras = new Extras();
     this.cutsceneIdx = 0;
     this.cutsceneData = [
-      { who: 'gendos', name: 'ГЕНДОС', img: 'sprites/guard1.png', text: 'Так-так... Что это у нас тут? МАКСОГЕН! Опять куришь в школьном туалете?!' },
-      { who: 'max', name: 'МАКСОГЕН', img: 'sprites/person1.png', text: 'Это... это не моё! Я просто держал для друга! Честно!' },
-      { who: 'gendos', name: 'ГЕНДОС', img: 'sprites/sticker.png', text: 'ВСЁ! Достал! К директору! СТОЯТЬ!!!' },
-      { who: 'max', name: 'МАКСОГЕН', img: 'sprites/person4.png', text: 'БЕЖИМ!!! (стресс: максимум)' },
+      { who: 'gendos', name: 'ГЕНДОС • ОБЖэшник', img: 'sprites/gendos/guard1.png', text: 'Так-так... Что это у нас тут? МАКСОГЕН! Учитель географии — и дымишь в школьном туалете?!' },
+      { who: 'max', name: 'МАКСОГЕН • географ', img: 'sprites/player/person1.png', text: 'Коллега! Это не моё! Я конфисковал у девятиклассников для урока о вреде курения!' },
+      { who: 'gendos', name: 'ГЕНДОС • ОБЖэшник', img: 'sprites/gendos/sticker.png', text: 'Обжэшника не проведёшь! Нарушение техники безопасности! К директору! СТОЯТЬ!!!' },
+      { who: 'max', name: 'МАКСОГЕН • географ', img: 'sprites/player/person4.png', text: 'БЕЖИМ!!! (стресс: максимум)' },
     ];
 
     // DOM
@@ -68,6 +76,11 @@ export class Game {
     this.hitFlash = document.getElementById('hit-flash');
     this.eventBanner = document.getElementById('event-banner');
     this.vignette = document.getElementById('tunnel-vignette');
+    this.duelOverlay = document.getElementById('duel-overlay');
+    this.duelPrompt = document.getElementById('duel-prompt');
+    this.duelTimerFill = document.getElementById('duel-timer-fill');
+    this.duelRound = document.getElementById('duel-round');
+    this.elHp = document.getElementById('hp');
     this.overlayCut = document.getElementById('overlay-cutscene');
     this.cutImg = document.getElementById('cut-img');
     this.cutName = document.getElementById('cut-name');
@@ -181,9 +194,34 @@ export class Game {
     }, {passive:true});
   }
 
-  _tryMove(dir) { if (this.state==='playing') this.player.move(dir); }
-  _tryJump() { if (this.state==='playing') this.player.jump(); }
-  _trySlide() { if (this.state==='playing') this.player.slide(); }
+  _inDuel() { return this.state === 'playing' && this.level && this.level.duel.active; }
+
+  // QTE-ввод дуэли: 'left' | 'right' | 'up' | 'down'
+  _duelInput(dir) {
+    if (!this._inDuel()) return;
+    const r = this.level.duel.input(dir);
+    if (r === 'hit') this.level._duelHit(this.player, this.guard);
+    else if (r === 'miss') {
+      this.level._duelLose(this.player, this.guard);
+      this.gameOver('Гендос оказался быстрее — Максоген проиграл дуэль!');
+    }
+  }
+
+  _tryMove(dir) {
+    if (this.state!=='playing') return;
+    if (this._inDuel()) { this._duelInput(dir < 0 ? 'left' : 'right'); return; }
+    this.player.move(dir);
+  }
+  _tryJump() {
+    if (this.state!=='playing') return;
+    if (this._inDuel()) { this._duelInput('up'); return; }
+    this.player.jump();
+  }
+  _trySlide() {
+    if (this.state!=='playing') return;
+    if (this._inDuel()) { this._duelInput('down'); return; }
+    this.player.slide();
+  }
 
   _onKey(e) {
     if (e.repeat) return;
@@ -195,6 +233,15 @@ export class Game {
     const up = code==='ArrowUp' || code==='KeyW' || code==='Space' || key==='w' || key==='ц' || key===' ';
     const down = code==='ArrowDown' || code==='KeyS' || key==='s' || key==='ы';
     if (this.state==='playing') {
+      // на дуэли стрелки/WASD — это QTE-кнопки, а не бег
+      if (this._inDuel()) {
+        if (left) { e.preventDefault(); this._duelInput('left'); }
+        if (right) { e.preventDefault(); this._duelInput('right'); }
+        if (up) { e.preventDefault(); this._duelInput('up'); }
+        if (down) { e.preventDefault(); this._duelInput('down'); }
+        if (code==='KeyP' || code==='Escape') this.pause();
+        return;
+      }
       if (left) { e.preventDefault(); this.player.move(-1); }
       if (right) { e.preventDefault(); this.player.move(1); }
       if (up) { e.preventDefault(); this.player.jump(); }
@@ -231,23 +278,36 @@ export class Game {
   }
 
   setMode(m) {
-    if (!MODES[m]) return;
+    if (m !== 'custom' && !MODES[m]) return;
     this.mode = m;
     document.querySelectorAll('.mode-btn').forEach(b => {
       b.classList.toggle('selected', b.dataset.mode === m);
     });
   }
 
+  currentOpts() {
+    if (this.mode === 'custom') return this.extras.customOpts();
+    return MODES[this.mode] || MODES.normal;
+  }
+
   async init() {
     await this.assetManager.load();
-    // фон — skybox.jpg на весь экран по центру (3D-коридоры убраны)
-    if (this.assetManager.textures.skybox) {
-      this.scene.background = this.assetManager.textures.skybox;
-    }
-    document.querySelectorAll('.mode-btn').forEach(b => {
+    // фон — школьные скайбоксы с плавной сменой (см. js/Skybox.js)
+    this.scene.background = new THREE.Color(0x0b1020);
+    this.skybox = new Skybox(this.scene, this.assetManager.textures.skyboxList);
+    document.querySelectorAll('.mode-btn[data-mode]').forEach(b => {
       b.addEventListener('click', () => this.setMode(b.dataset.mode));
     });
     this.setMode('normal');
+    // EXTRAS-книга
+    this.extras.init(this.assetManager, MODES);
+    this.extras.onPlayCustom = () => {
+      this.extras.close();
+      this.setMode('custom');
+      this.startGame();
+    };
+    document.getElementById('btn-extra').addEventListener('click', () => this.extras.open('models'));
+    document.getElementById('btn-extra-close').addEventListener('click', () => this.extras.close());
     this.loadingText.textContent = 'Готово! Выбери режим и жми ИГРАТЬ';
     this.loadingText.style.color = '#2ecc71';
 
@@ -267,8 +327,11 @@ export class Game {
 
   startGame() {
     // перед побегом — катсцена в туалете; применяем выбранный режим
-    this.level.applyMode(MODES[this.mode]);
-    this.guard.applyMode(MODES[this.mode]);
+    sfx.ensure(); // жест игрока — можно включить звук
+    const opts = this.currentOpts();
+    this.level.applyMode(opts);
+    this.guard.applyMode(opts);
+    this.player.maxHp = opts.hp || 5;
     this.level.reset();
     this.player.reset();
     this.guard.reset();
@@ -319,6 +382,7 @@ export class Game {
     this.clock.getDelta();
   }
   restart() {
+    this.player.maxHp = this.currentOpts().hp || 5;
     this.level.reset();
     this.player.reset();
     this.guard.reset();
@@ -326,6 +390,7 @@ export class Game {
     this.overlayPause.classList.add('hidden');
     this.overlayCut.classList.add('hidden');
     this.state='playing';
+    sfx.ensure();
     this.clock.getDelta();
   }
 
@@ -336,7 +401,7 @@ export class Game {
     document.getElementById('go-coins').textContent = this.level.coins;
     document.getElementById('go-vodka').textContent = this.level.vodka;
     document.getElementById('go-dist').textContent = Math.floor(this.level.distance);
-    document.getElementById('go-mode').textContent = MODES[this.mode].label;
+    document.getElementById('go-mode').textContent = this.currentOpts().label;
     document.getElementById('go-reason').textContent = reason;
     if (score > this.best) {
       this.best = score;
@@ -348,6 +413,20 @@ export class Game {
   }
 
   _updateCamera(delta) {
+    // на дуэли камера улетает за спину Максогена и смотрит на Гендоса
+    if (this._inDuel() && this.guard) {
+      const px = this.player.currentX * 0.7;
+      const gx = this.guard.currentX;
+      const gz = this.guard.group.position.z;
+      const k = Math.min(1, delta * 2.2); // перелёт ~за секунду
+      this.camera.position.x += (px - this.camera.position.x) * k;
+      this.camera.position.y += (2.6 - this.camera.position.y) * k;
+      this.camera.position.z += (-4.6 - this.camera.position.z) * k;
+      this.camera.lookAt(gx, 1.4, gz);
+      this.camera.fov += (62 - this.camera.fov) * k;
+      this.camera.updateProjectionMatrix();
+      return;
+    }
     const targetX = this.player ? this.player.currentX * 0.35 : 0;
     const targetY = 3.25 + (this.player ? this.player.y * 0.22 : 0);
     // на узком портретном экране отъезжаем и расширяем FOV, иначе крайние дорожки обрежет
@@ -369,10 +448,27 @@ export class Game {
     }
   }
 
+  // QTE-подсказка дуэли: стрелка + тающая полоска времени
+  _syncDuelUI() {
+    const d = this.level.duel;
+    if (d.active && d.transition <= 0 && d.prompt) {
+      this.duelOverlay.classList.remove('hidden');
+      this.duelPrompt.textContent = d.arrow;
+      this.duelTimerFill.style.width = `${d.progress * 100}%`;
+      this.duelTimerFill.style.background = d.progress < 0.3 ? '#e74c3c' : '#ffdd33';
+      this.duelRound.textContent = `Раунд ${Math.min(d.round, 3)}/3`;
+    } else {
+      this.duelOverlay.classList.add('hidden');
+    }
+  }
+
   _updateHUD() {
     this.elScore.textContent = Math.floor(this.level.score);
     this.elCoins.textContent = this.level.coins;
     this.elVodka.textContent = this.level.vodka;
+    if (this.elHp) {
+      this.elHp.textContent = '❤'.repeat(this.player.hp) + '🖤'.repeat(this.player.maxHp - this.player.hp);
+    }
     if (this.level.multiplier > 1) {
       this.elMult.classList.remove('hidden');
       this.elMult.innerHTML = `x${this.level.multiplier} <span>${this.level.multiplierTimer.toFixed(1)}с</span>`;
@@ -398,11 +494,22 @@ export class Game {
     if (document.body.dataset.state !== this.state) {
       document.body.dataset.state = this.state;
     }
+    // плавная смена школьных скайбоксов крутится всегда
+    if (this.skybox) this.skybox.update(delta);
 
     if (this.state==='playing' && this.level && this.player && this.guard) {
       this.level.update(delta, this.camera, this.player, this.guard);
-      this.guard.update(delta, this.player, this.level.speed);
+      // на дуэли Гендос замер с пистолетом — не догоняет
+      if (!this.level.duel.active) {
+        this.guard.update(delta, this.player, this.level.speed);
+      }
       this.player.update(delta, this.guard.distance);
+
+      // проигрыш дуэли по таймауту — ран сразу кончается
+      if (this.level.duelLost) {
+        this.level.duelLost = false;
+        this.gameOver('Гендос выстрелил первым — Максоген проиграл дуэль!');
+      }
 
       const res = this.level.checkCollisions(this.player);
       if (res.coinCollected) {
@@ -415,8 +522,8 @@ export class Game {
       }
       // пули Гендоса (на НЕВОЗМОЖНО — сразу проигрыш)
       const bulletHit = this.level.checkBullets(this.player);
-      if (bulletHit) {
-        if (MODES[this.mode].bulletKill) {
+      if (bulletHit && this.player.invuln <= 0) {
+        if (this.currentOpts().bulletKill) {
           this.gameOver('Гендос подстрелил Максогена!');
         } else {
           this.player.hit();
@@ -424,25 +531,36 @@ export class Game {
           this.level.eventText = '🔫 ГЕНДОС ПОПАЛ! Максоген шатается!';
           this.level.eventTextTimer = 1.4;
           this._flashHit();
-          if (this.guard.isCaught()) {
+          if (!this.player.alive) {
+            this.gameOver('Максоген изрешечён... 5 ударов — конец!');
+          } else if (this.guard.isCaught()) {
             this.gameOver('Гендос подстрелил Максогена и схватил его!');
           }
         }
+      }
+      // форд Игнатьевича: задел — ран сразу кончается (это же машина)
+      if (res.carKill) {
+        this._flashHit();
+        this.gameOver('Игнатьевич задавил Максогена на красном форде!');
       }
       if (res.hit) {
         if (this.player.invuln <= 0) {
           this.player.hit();
           this.guard.onPlayerHit();
           this._flashHit();
-          if (this.guard.isCaught()) {
+          if (!this.player.alive) {
+            this.gameOver('Максоген разбился о преграды... 5 ударов — конец!');
+          } else if (this.guard.isCaught()) {
             this.gameOver('Гендос схватил Максогена после столкновения!');
           }
         }
-      } else {
+      } else if (!res.carKill) {
         if (this.guard.isCaught()) {
           this.gameOver('Гендос догнал Максогена!');
         }
       }
+
+      this._syncDuelUI();
 
       // баннер временного ивента
       if (this.level.eventText) {
