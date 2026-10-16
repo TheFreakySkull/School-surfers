@@ -124,6 +124,25 @@ export class Game {
     } catch { /* не поддерживается — просто играем */ }
   }
 
+  // Жёсткий сброс кэша для мобилок: чистим CacheStorage и service workers,
+  // затем перезагружаемся с новым query-параметром — мимо HTTP-кэша.
+  // Нужно, когда телефон держит старую версию игры после обновления.
+  async _hardCacheReset() {
+    try {
+      if ('serviceWorker' in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map((r) => r.unregister()));
+      }
+      if ('caches' in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map((k) => caches.delete(k)));
+      }
+    } catch { /* чистим что можем, дальше перезагрузка */ }
+    const url = new URL(location.href);
+    url.searchParams.set('v', Date.now().toString());
+    location.replace(url.toString());
+  }
+
   _showGlError() {
     let el = document.getElementById('gl-error');
     if (!el) {
@@ -354,6 +373,7 @@ export class Game {
     };
     document.getElementById('btn-extra').addEventListener('click', () => this.extras.open('models'));
     document.getElementById('btn-extra-close').addEventListener('click', () => this.extras.close());
+    document.getElementById('btn-cache')?.addEventListener('click', () => this._hardCacheReset());
     this.loadingText.textContent = 'Готово! Выбери режим и жми ИГРАТЬ';
     this.loadingText.style.color = '#2ecc71';
 
